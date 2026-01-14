@@ -1,76 +1,163 @@
 """
-Training loop for Cournot competition experiments (Independent Q-Learning).
-Mirrors train.py structure (RandomAgent), but uses IndependentQLearningAgent.
+Training loop for Cournot competition experiments (Q-learning).
+Also records and plots training metrics.
 """
 
 import numpy as np
 import sys
 from pathlib import Path
 
-# Add project root to Python path (so imports work when running the file directly)
+import matplotlib.pyplot as plt
+
+
+# Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-# NOTE: your folder is spelled "environnement" in this file.
-# If your actual folder is "environement" (typo), change the import accordingly.
 from environnement.cournot_env import CournotEnv
-
 from experiments.config import ENV_CONFIG, TRAINING_CONFIG
+from agents.qlearning_agent import IndependentQLearningAgent as QLearningAgent, QLearningConfig
 
-# Q-learning agent (should live in agents/qlearning_agent.py)
-from agents.qlearning_agent import IndependentQLearningAgent, QLearningConfig
+
+def _ensure_results_dir() -> Path:
+    out_dir = project_root / "results"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return out_dir
+
+
+def _moving_average(x: np.ndarray, window: int) -> np.ndarray:
+    if window <= 1:
+        return x
+    window = int(window)
+    kernel = np.ones(window) / window
+    return np.convolve(x, kernel, mode="valid")
+
+
+def _plot_training_curves(
+    avg_profit_per_firm: np.ndarray,
+    avg_price: np.ndarray,
+    avg_q_per_firm: np.ndarray,
+    title_prefix: str,
+    out_path: Path,
+    smooth_window: int = 25,
+):
+    episodes = np.arange(len(avg_profit_per_firm))
+
+    fig = plt.figure(figsize=(10, 10))
+
+    # Profit
+    ax1 = plt.subplot(3, 1, 1)
+    ax1.plot(episodes, avg_profit_per_firm, label="Avg profit/firm")
+    if len(avg_profit_per_firm) >= smooth_window:
+        y = _moving_average(avg_profit_per_firm, smooth_window)
+        ax1.plot(np.arange(len(y)), y, label=f"Smoothed (window={smooth_window})")
+    ax1.set_title(f"{title_prefix} - Avg profit per firm")
+    ax1.set_xlabel("Episode")
+    ax1.set_ylabel("Profit")
+    ax1.legend()
+
+    # Price
+    ax2 = plt.subplot(3, 1, 2)
+    ax2.plot(episodes, avg_price, label="Avg price")
+    if len(avg_price) >= smooth_window:
+        y = _moving_average(avg_price, smooth_window)
+        ax2.plot(np.arange(len(y)), y, label=f"Smoothed (window={smooth_window})")
+    ax2.set_title(f"{title_prefix} - Avg price")
+    ax2.set_xlabel("Episode")
+    ax2.set_ylabel("Price")
+    ax2.legend()
+
+    # Quantities
+    ax3 = plt.subplot(3, 1, 3)
+    for i in range(avg_q_per_firm.shape[1]):
+        ax3.plot(episodes, avg_q_per_firm[:, i], label=f"Firm {i} avg q")
+    ax3.set_title(f"{title_prefix} - Avg quantities")
+    ax3.set_xlabel("Episode")
+    ax3.set_ylabel("Quantity")
+    ax3.legend()
+
+    plt.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+
+
+def evaluate(env: CournotEnv, agents, n_eval_episodes: int = 20):
+    """
+    Evaluate learned policies with epsilon=0 (greedy).
+    Returns dict with avg_q, avg_price, avg_profit.
+    """
+    for ag in agents:
+        ag.cfg.epsilon = 0.0
+
+    total_q = np.zeros(env.n_firms, dtype=float)
+    total_profit = np.zeros(env.n_firms, dtype=float)
+    total_price = 0.0
+    steps = 0
+
+    for _ in range(n_eval_episodes):
+        state = env.reset()
+        done = False
+
+        while not done:
+            actions = np.array([agent.select_action(state)[0] for agent in agents], dtype=float)
+            next_state, rewards, done, info = env.step(actions)
+
+            price_t = float(info.get("price", next_state[-1])) if isinstance(info, dict) else float(next_state[-1])
+
+            total_q += actions
+            total_profit += rewards
+            total_price += price_t
+            steps += 1
+
+            state = next_state
+
+    return {
+        "avg_q": total_q / max(steps, 1),
+        "avg_price": total_price / max(steps, 1),
+        "avg_profit": total_profit / max(steps, 1),
+        "steps": steps,
+    }
 
 
 def train():
     env = CournotEnv(**ENV_CONFIG)
 
-    # ----- Q-learning hyperparams -----
-    # Try to read from config if you added them there; otherwise fall back to sensible defaults.
-    # You can optionally add something like TRAINING_CONFIG["qlearning"] = {...}
-    qcfg_dict = TRAINING_CONFIG.get("qlearning", {})
+    num_episodes = TRAINING_CONFIG["num_episodes"]
+    log_every = TRAINING_CONFIG["log_every"]
+    smooth_window = TRAINING_CONFIG.get("smooth_window", 25)
 
-    alpha = qcfg_dict.get("alpha", 0.15)
-    gamma = qcfg_dict.get("gamma", 0.95)
-    epsilon = qcfg_dict.get("epsilon", 0.30)
-    epsilon_min = qcfg_dict.get("epsilon_min", 0.05)
-    epsilon_decay = qcfg_dict.get("epsilon_decay", 0.9995)
+    # Optional: Q-learning specific config under TRAINING_CONFIG["qlearning"]
+    qcfg = TRAINING_CONFIG.get("qlearning", {})
 
-    n_action_bins = qcfg_dict.get("n_action_bins", 31)
-    n_state_bins_q = qcfg_dict.get("n_state_bins_q", 21)
-    n_state_bins_p = qcfg_dict.get("n_state_bins_p", 21)
-
-    # price_max helps state discretization for price dimension
-    price_max = ENV_CONFIG.get("a", None)
-
-    # ----- Agents: one per firm (independent learning) -----
-    # IMPORTANT: each agent must have its own config instance (epsilon decays per agent).
+    # One agent per firm (decentralized learning)
     agents = []
     for i in range(env.n_firms):
         cfg_i = QLearningConfig(
-            alpha=alpha,
-            gamma=gamma,
-            epsilon=epsilon,
-            epsilon_min=epsilon_min,
-            epsilon_decay=epsilon_decay,
+            alpha=qcfg.get("alpha", 0.15),
+            gamma=qcfg.get("gamma", 0.95),
+            epsilon=qcfg.get("epsilon", 0.30),
+            epsilon_min=qcfg.get("epsilon_min", 0.05),
+            epsilon_decay=qcfg.get("epsilon_decay", 0.9995),
         )
+
         agents.append(
-            IndependentQLearningAgent(
+            QLearningAgent(
                 q_max=ENV_CONFIG["q_max"],
-                n_action_bins=n_action_bins,
-                n_state_bins_q=n_state_bins_q,
-                n_state_bins_p=n_state_bins_p,
-                price_max=price_max,
-                config=cfg_i,
                 seed=i,
+                config=cfg_i,
+                n_action_bins=qcfg.get("n_action_bins", 31),
+                n_state_bins_q=qcfg.get("n_state_bins_q", 21),
+                n_state_bins_p=qcfg.get("n_state_bins_p", 21),
+                price_max=ENV_CONFIG.get("a", None),
             )
         )
 
-    num_episodes = TRAINING_CONFIG["num_episodes"]
-    log_every = TRAINING_CONFIG["log_every"]
-
+    # tracking
     episode_rewards = []
-    episode_avg_price = []
-    episode_avg_q = []
+    avg_profit_per_firm = np.zeros(num_episodes, dtype=float)
+    avg_price = np.zeros(num_episodes, dtype=float)
+    avg_q_per_firm = np.zeros((num_episodes, env.n_firms), dtype=float)
+    epsilon_trace = np.zeros(num_episodes, dtype=float)
 
     for episode in range(num_episodes):
         state = env.reset()
@@ -85,24 +172,19 @@ def train():
             agent.reset()
 
         while not done:
-            # each agent returns shape (1,), environment expects shape (n_firms,)
             actions = np.array([agent.select_action(state)[0] for agent in agents], dtype=float)
-
             next_state, rewards, done, info = env.step(actions)
 
-            # update each independent agent with its own reward
             for i, agent in enumerate(agents):
                 agent.update(
                     state=state,
-                    action=np.array([actions[i]], dtype=float),  # shape (1,)
+                    action=np.array([actions[i]], dtype=float),  # BaseAgent expects np.ndarray
                     reward=float(rewards[i]),
                     next_state=next_state,
-                    done=done,
+                    done=done
                 )
                 total_rewards[i] += float(rewards[i])
 
-            # tracking
-            # Prefer info["price"] if present; else price is last component of state by your design.
             price_t = float(info.get("price", next_state[-1])) if isinstance(info, dict) else float(next_state[-1])
             sum_price += price_t
             sum_q += actions
@@ -111,23 +193,67 @@ def train():
             state = next_state
 
         episode_rewards.append(total_rewards)
-        episode_avg_price.append(sum_price / max(steps, 1))
-        episode_avg_q.append(sum_q / max(steps, 1))
+
+        avg_profit_per_firm[episode] = float(np.mean(total_rewards))
+        avg_price[episode] = sum_price / max(steps, 1)
+        avg_q_per_firm[episode, :] = sum_q / max(steps, 1)
+        epsilon_trace[episode] = agents[0].cfg.epsilon
 
         if episode % log_every == 0:
-            avg_profit = float(np.mean(total_rewards))
             print(
                 f"Episode {episode:4d} | "
-                f"Avg profit/firm: {avg_profit:10.2f} | "
-                f"Avg price: {episode_avg_price[-1]:8.2f} | "
-                f"Avg q: {np.round(episode_avg_q[-1], 2)}"
+                f"Avg profit/firm: {avg_profit_per_firm[episode]:10.2f} | "
+                f"Avg price: {avg_price[episode]:8.2f} | "
+                f"Avg q: {np.round(avg_q_per_firm[episode], 2)} | "
+                f"Epsilon: {epsilon_trace[episode]:.3f}"
             )
 
-    return (
-        np.array(episode_rewards),        # shape (episodes, n_firms)
-        np.array(episode_avg_price),      # shape (episodes,)
-        np.array(episode_avg_q),          # shape (episodes, n_firms)
+    # evaluation
+    eval_stats = evaluate(env, agents, n_eval_episodes=20)
+    print("\n=== Evaluation (epsilon=0) ===")
+    print("Avg quantities:", np.round(eval_stats["avg_q"], 3))
+    print("Avg price:", round(float(eval_stats["avg_price"]), 3))
+    print("Avg profits:", np.round(eval_stats["avg_profit"], 3))
+
+    # save + plot
+    out_dir = _ensure_results_dir()
+
+    np.savez(
+        out_dir / "qlearning_training.npz",
+        episode_rewards=np.array(episode_rewards),
+        avg_profit_per_firm=avg_profit_per_firm,
+        avg_price=avg_price,
+        avg_q_per_firm=avg_q_per_firm,
+        epsilon_trace=epsilon_trace,
+        eval_avg_q=eval_stats["avg_q"],
+        eval_avg_price=eval_stats["avg_price"],
+        eval_avg_profit=eval_stats["avg_profit"],
+        env_config=ENV_CONFIG,
+        training_config=TRAINING_CONFIG,
     )
+
+    _plot_training_curves(
+        avg_profit_per_firm=avg_profit_per_firm,
+        avg_price=avg_price,
+        avg_q_per_firm=avg_q_per_firm,
+        title_prefix="Q-learning",
+        out_path=out_dir / "qlearning_training.png",
+        smooth_window=smooth_window,
+    )
+
+    # epsilon plot
+    fig = plt.figure(figsize=(10, 4))
+    plt.plot(np.arange(num_episodes), epsilon_trace, label="epsilon")
+    plt.title("Q-learning - Epsilon over episodes")
+    plt.xlabel("Episode")
+    plt.ylabel("Epsilon")
+    plt.legend()
+    plt.tight_layout()
+    fig.savefig(out_dir / "qlearning_epsilon.png", dpi=150)
+    plt.close(fig)
+
+    print(f"\nSaved results to: {out_dir}")
+    return np.array(episode_rewards)
 
 
 if __name__ == "__main__":

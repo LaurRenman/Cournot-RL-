@@ -28,6 +28,7 @@ Thumbs.db
 
 # Experiments/Results (customize based on your needs)
 experiments/results/
+results/
 *.log
 *.pkl
 *.pth

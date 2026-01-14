@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 
-from basic_agent import BaseAgent  # your interface :contentReference[oaicite:2]{index=2}
+from agents.basic_agent import BaseAgent
 
 
 def _make_edges(low: float, high: float, n_bins: int) -> np.ndarray:
