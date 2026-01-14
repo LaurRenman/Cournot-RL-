@@ -4,6 +4,13 @@ Training loop for Cournot competition experiments.
 
 import numpy as np
 
+import sys
+from pathlib import Path
+
+# Adaugă directorul părinte la sys.path
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
 from environment.cournot_env import CournotEnv
 from agents.basic_agent import RandomAgent
 from experiments.config import ENV_CONFIG, TRAINING_CONFIG
