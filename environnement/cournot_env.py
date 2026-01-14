@@ -1,5 +1,7 @@
 import numpy as np
 
+from model.demand import inverse_demand
+from model.payoff import profit
 
 class CournotEnv:
     """
@@ -28,7 +30,8 @@ class CournotEnv:
         horizon: int,
         seed: int | None = None
     ):
-        assert len(costs) == n_firms, "costs must match number of firms"
+        if len(costs) != n_firms:
+            raise ValueError("costs must match number of firms")
 
         self.n_firms = n_firms
         self.a = a                  # Demand intercept
@@ -85,10 +88,17 @@ class CournotEnv:
         total_quantity = np.sum(actions)
 
         # Market price (non-negative)
-        price = max(self.a - self.b * total_quantity, 0.0)
+        price = inverse_demand(
+            total_quantity=total_quantity,
+            a=self.a,
+            b=self.b
+        )
 
         # Firm profits
-        rewards = (price - self.costs) * actions
+        rewards = np.array([
+            profit(price, actions[i], self.costs[i])
+            for i in range(self.n_firms)
+        ])
 
         # Update internal state
         self.last_quantities = actions
@@ -99,7 +109,8 @@ class CournotEnv:
 
         info = {
             "price": price,
-            "total_quantity": total_quantity
+            "total_quantity": total_quantity,
+            "time":self.t
         }
 
         return self._get_state(), rewards, done, info
@@ -115,7 +126,7 @@ class CournotEnv:
         actions = np.asarray(actions, dtype=float)
 
         if actions.shape != (self.n_firms,):
-            raise ValueError(f"Expected action shape ({self.n_firms},)")
+            raise ValueError(f"Expected action shape ({self.n_firms},),got {actions.shape}")
 
         return np.clip(actions, 0.0, self.q_max)
 
@@ -129,22 +140,8 @@ class CournotEnv:
         ])
 
     # --------------------------------------------------
-    # Utility methods (optional but useful)
+    # Dimensions
     # --------------------------------------------------
-
-    def nash_equilibrium(self):
-        """
-        Computes symmetric Cournot-Nash equilibrium quantities
-        for linear demand and constant marginal costs.
-
-        Assumes identical costs.
-        """
-        if not np.allclose(self.costs, self.costs[0]):
-            raise ValueError("Nash equilibrium implemented only for symmetric costs")
-
-        c = self.costs[0]
-        q_star = (self.a - c) / (self.b * (self.n_firms + 1))
-        return np.full(self.n_firms, max(q_star, 0.0))
 
     def state_dim(self):
         return self.n_firms + 1
@@ -152,26 +149,3 @@ class CournotEnv:
     def action_dim(self):
         return self.n_firms
 
-
-# Example use 
-
-if __name__ == "__main__":
-    env = CournotEnv(
-        n_firms=2,
-        a=100,
-        b=1,
-        costs=[10, 10],
-        q_max=100,
-        horizon=50,
-        seed=42
-    )
-
-    state = env.reset()
-
-    for _ in range(5):
-        actions = np.array([20.0, 20.0])  # fixed strategy
-        state, rewards, done, info = env.step(actions)
-
-        print(f"Price: {info['price']:.2f}, Rewards: {rewards}")
-
-    print("Nash quantities:", env.nash_equilibrium())
