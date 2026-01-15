@@ -13,16 +13,15 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from environnement.cournot_env import CournotEnv
-from agents.basic_agent import RandomAgent
 from experiments.config import ENV_CONFIG, TRAINING_CONFIG
 
 
-def train():
+def train(agent_class, agent_kwargs):
     env = CournotEnv(**ENV_CONFIG)
 
     # One agent per firm (decentralized learning)
     agents = [
-        RandomAgent(n_actions=1, q_max=ENV_CONFIG["q_max"], seed=i)
+        agent_class(**agent_kwargs, seed=i)
         for i in range(env.n_firms)
     ]
 
@@ -61,14 +60,10 @@ def train():
         episode_rewards.append(total_rewards)
 
         if episode % log_every == 0:
-            avg_reward = np.mean(total_rewards)
             print(
                 f"Episode {episode:4d} | "
-                f"Avg profit per firm: {avg_reward:8.2f}"
+                f"Avg profit per firm: {total_rewards.mean():8.2f}"
             )
+       
+    return np.array(episode_rewards), agents
 
-    return np.array(episode_rewards)
-
-
-if __name__ == "__main__":
-    train()

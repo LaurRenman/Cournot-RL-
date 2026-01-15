@@ -4,7 +4,7 @@ Runs baseline (non-learning) agents for Cournot competition.
 
 import numpy as np
 
-from environment.cournot_env import CournotEnv
+from environnement.cournot_env import CournotEnv
 from agents.basic_agent import RandomAgent
 from experiments.config import ENV_CONFIG
 

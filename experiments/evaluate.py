@@ -4,18 +4,15 @@ Evaluation script for trained Cournot agents.
 
 import numpy as np
 
-from environment.cournot_env import CournotEnv
-from agents.basic_agent import RandomAgent
+from environnement.cournot_env import CournotEnv
 from experiments.config import ENV_CONFIG, EVAL_CONFIG
 
 
-def evaluate():
+def evaluate(agents):
     env = CournotEnv(**ENV_CONFIG)
 
-    agents = [
-        RandomAgent(n_actions=1, q_max=ENV_CONFIG["q_max"], seed=i)
-        for i in range(env.n_firms)
-    ]
+    for agent in agents:
+        agent.epsilon = 0.0
 
     num_episodes = EVAL_CONFIG["num_episodes"]
     total_rewards = []
@@ -42,7 +39,3 @@ def evaluate():
         print(f"Firm {i}: {r:.2f}")
 
     return avg_rewards
-
-
-if __name__ == "__main__":
-    evaluate()
