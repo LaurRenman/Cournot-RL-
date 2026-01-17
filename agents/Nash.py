@@ -19,7 +19,7 @@ ENV_CONFIG = {
     "seed": 42
 }
 
-N_player = n
+N_player = 2
 
 # --------------------
 # Set random seed
@@ -30,7 +30,7 @@ np.random.seed(ENV_CONFIG["seed"])
 # Neural Network Policy with Residual Connection
 # --------------------
 class PolicyNetwork:
-    def __init__(self, input_dim=3, hidden_dim=64, output_dim=1):
+    def __init__(self, input_dim=4, hidden_dim=64, output_dim=1):
         """
         Neural network with residual/skip connection to prevent mode collapse
         Architecture: Linear baseline + NN correction
@@ -41,7 +41,7 @@ class PolicyNetwork:
         
         # Linear baseline (like our original linear policy)
         # This ensures the network always has a reasonable starting point
-        self.w_linear = np.array([0.33, -33.0, -0.33])  # [w_a, w_b, w_c]
+        self.w_linear = np.array([0.33, -33.0, -0.33, +0.16])  # [w_a, w_b, w_c]
         self.b_linear = 0.0
         
         # Neural network correction (learns residuals from linear baseline)
@@ -54,8 +54,8 @@ class PolicyNetwork:
         self.b2 = np.zeros(output_dim)  # Start with zero correction
         
         # Normalization statistics
-        self.input_mean = np.array([100.0, 1.0, 52.5])
-        self.input_std = np.array([15.0, 0.15, 35.0])
+        self.input_mean = np.array([100.0, 1.0, 52.5, 52.5])
+        self.input_std  = np.array([15.0, 0.15, 35.0, 35.0])
         
         # Adam optimizer parameters
         self.m_w_linear = np.zeros_like(self.w_linear)
@@ -264,11 +264,14 @@ for t in range(ITE):
 
     # Compute policy mean using neural network
     for i in range(N_player):
-        state = np.array([a, b_demand, ind_cost[i]])
+        state = np.array([
+            a,
+            b_demand,
+            ind_cost[i],
+            ind_cost[1 - i]
+        ])
         mu_t[i, t] = policies[i].forward(state)
-        mu_t[i, t] = min(mu_t[i, t], ENV_CONFIG["q_max"])
 
-    # Sample actions
     act[:, t] = np.random.normal(mu_t[:, t], sigma)
     act[:, t] = np.clip(act[:, t], 0.0, ENV_CONFIG["q_max"])
 
@@ -290,15 +293,26 @@ for t in range(ITE):
     advantage_std = (1 - stats_alpha) * advantage_std + stats_alpha * np.abs(advantage_signal - advantage_mean)
     advantage_normalized = (advantage_signal - advantage_mean) / (advantage_std + 1e-8)
 
+    # --------------------
     # Policy gradient update
+    # --------------------
     for i in range(N_player):
-        state = np.array([a, b_demand, ind_cost[i]])
-        
+        state = np.array([
+            a,
+            b_demand,
+            ind_cost[i],
+            ind_cost[1 - i]
+        ])
+
+        # score function gradient for Gaussian policy
         score_grad = (act[i, t] - mu_t[i, t]) / (sigma[i] ** 2)
+
+        # REINFORCE gradient
         grad_mu = advantage_normalized[i] * score_grad
-        
+
         grads = policies[i].backward(state, grad_mu)
         policies[i].adam_update(grads, lr_t)
+
 
 print("Training complete!")
 
@@ -332,8 +346,8 @@ learned_q0 = np.zeros(len(cost_range))
 learned_q1 = np.zeros(len(cost_range))
 
 for idx, c in enumerate(cost_range):
-    state0 = np.array([a_fixed, b_fixed, c])
-    state1 = np.array([a_fixed, b_fixed, c])
+    state0 = np.array([a_fixed, b_fixed, c, c])
+    state1 = np.array([a_fixed, b_fixed, c, c])
     
     learned_q0[idx] = min(policies[0].forward(state0), ENV_CONFIG["q_max"])
     learned_q1[idx] = min(policies[1].forward(state1), ENV_CONFIG["q_max"])
@@ -382,7 +396,12 @@ for scenario in test_scenarios:
     
     mu_test = np.zeros(N_player)
     for i in range(N_player):
-        state = np.array([a_test, b_test, costs_test[i]])
+        state = np.array([
+            a_test,
+            b_test,
+            costs_test[i],
+            costs_test[1 - i]
+        ])
         mu_test[i] = min(policies[i].forward(state), ENV_CONFIG["q_max"])
     
     for t in range(N_test):
