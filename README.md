@@ -10,11 +10,7 @@ Agents learn quantity-setting policies in a stochastic Cournot market using **po
 
 Each firm learns to minimize **instantaneous regret**:
 
-[
-\text{Regret}*i = \max*{q_i'} \pi_i(q_i', q_{-i}) - \pi_i(q_i, q_{-i})
-]
-
-![Nash equilibrium](https://latex.codecogs.com/svg.image?q_i^*=\frac{a-c}{3b})
+Regret_i = max_{q_i'} π_i(q_i', q_{−i}) − π_i(q_i, q_{−i})
 
 Instead of learning to maximize profit directly, agents learn policies whose **regret converges to zero**, which characterizes Nash equilibrium behavior in Cournot games.
 
