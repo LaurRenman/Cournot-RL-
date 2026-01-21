@@ -10,7 +10,9 @@ Agents learn quantity-setting policies in a stochastic Cournot market using **po
 
 Each firm learns to minimize **instantaneous regret**:
 
-Regret_i = max_{q_i'} π_i(q_i', q_{−i}) − π_i(q_i, q_{−i})
+$$
+\text{Regret}_i = \max_{q_i'} \; \pi_i(q_i', q_{-i}) - \pi_i(q_i, q_{-i})
+$$
 
 Instead of learning to maximize profit directly, agents learn policies whose **regret converges to zero**, which characterizes Nash equilibrium behavior in Cournot games.
 
@@ -26,37 +28,39 @@ Key properties:
 
 * **Multiple information regimes**
 
-  * `1D` — Minimal: own cost only
-  * `2D` — Partial: demand slope + own cost
-  * `3D` — Asymmetric: full demand + own cost
+  * `1D` — Minimal: own cost only  
+  * `2D` — Partial: demand slope + own cost  
+  * `3D` — Asymmetric: full demand + own cost  
   * `4D` — Nash: full information (demand + opponent cost)
 
 * **Residual policy architecture**
 
-  * Linear Cournot-inspired baseline
-  * Neural network learns only residual corrections
+  * Linear Cournot-inspired baseline  
+  * Neural network learns only residual corrections  
   * Prevents mode collapse and stabilizes learning
 
 * **Regret-normalized policy gradients**
 
-  * Automatically rescales regret to ensure stable gradients
+  * Automatically rescales regret to ensure stable gradients  
   * Preserves equilibrium fixed points
 
 * **Self-play support**
 
-  * Learning agent periodically clones itself into opponent
+  * Learning agent periodically clones itself into opponent  
   * Enables Nash convergence without hard-coding equilibrium
 
 * **Full evaluation suite**
 
-  * Policy response plots
-  * Training convergence
-  * Cross-information agent comparisons
+  * Policy response plots  
+  * Training convergence  
+  * Cross-information agent comparisons  
   * Profit and quantity distributions
 
 ---
 
 ## Project Structure
+
+
 
 ```
 .
