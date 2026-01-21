@@ -14,6 +14,8 @@ Each firm learns to minimize **instantaneous regret**:
 \text{Regret}*i = \max*{q_i'} \pi_i(q_i', q_{-i}) - \pi_i(q_i, q_{-i})
 ]
 
+![Nash equilibrium](https://latex.codecogs.com/svg.image?q_i^*=\frac{a-c}{3b})
+
 Instead of learning to maximize profit directly, agents learn policies whose **regret converges to zero**, which characterizes Nash equilibrium behavior in Cournot games.
 
 Key properties:
