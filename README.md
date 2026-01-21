@@ -1,9 +1,3 @@
-Yes — I understand exactly what this project does and how all the pieces fit together. Below is a **clean, professional GitHub README** tailored to your codebase, assumptions, and experimental structure. It’s written for an audience familiar with **reinforcement learning, game theory, and economics**, but still readable.
-
-You can copy-paste this directly into `README.md`.
-
----
-
 # Regret-Minimizing Reinforcement Learning in Cournot Competition
 
 This repository implements a **regret-minimization–based reinforcement learning framework** for Cournot competition with agents that have **heterogeneous information structures**.
@@ -254,14 +248,3 @@ This codebase is suitable for:
 ## Citation
 
 If you use or adapt this code for academic work, please cite appropriately.
-
----
-
-If you want, I can also:
-
-* Add **figures/examples** to the README
-* Write a **short “Results Summary” section**
-* Convert this into a **paper-style appendix**
-* Refactor into a pip-installable package
-
-Just tell me.
