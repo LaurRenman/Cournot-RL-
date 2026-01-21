@@ -72,27 +72,28 @@ Key properties:
 ├── README.md
 ```
 
+
 ---
 
 ## Environment: Cournot Game
 
 Market price is linear:
 
-[
+$$
 P(Q) = \max(a - bQ, 0)
-]
+$$
 
-Firm ( i )’s profit:
+Firm $i$’s profit:
 
-[
-\pi_i = (P(Q) - c_i) q_i
-]
+$$
+\pi_i = (P(Q) - c_i)\, q_i
+$$
 
 Where:
 
-* ( a, b ) are sampled each episode
-* Costs ( c_i ) are private information
-* Quantity is bounded: ( q_i \in [0, q_{\max}] )
+* $a, b$ are sampled each episode  
+* Costs $c_i$ are private information  
+* Quantity is bounded: $q_i \in [0, q_{\max}]$
 
 The environment provides:
 
@@ -106,19 +107,20 @@ The environment provides:
 
 All policies share the same structure:
 
-[
-q(s) = \underbrace{w^\top s + b}*{\text{Cournot baseline}}
-;;+;;
-\underbrace{\text{NN}(s)}*{\text{learned correction}}
-]
+$$
+q(s) =
+\underbrace{w^\top s + b}_{\text{Cournot baseline}}
+\;+\;
+\underbrace{\text{NN}(s)}_{\text{learned correction}}
+$$
 
 ### Why residual learning?
 
-* The linear term encodes approximate Cournot logic
-* The NN only learns deviations
+* The linear term encodes approximate Cournot logic  
+* The NN only learns deviations  
 * Faster convergence, better stability, interpretable behavior
 
-Activation: **ELU**
+Activation: **ELU**  
 Optimizer: **Adam (manual NumPy implementation)**
 
 ---
@@ -127,7 +129,7 @@ Optimizer: **Adam (manual NumPy implementation)**
 
 Each episode:
 
-1. Sample market parameters ((a, b)) and costs
+1. Sample market parameters $(a, b)$ and costs
 2. Agents observe states according to their information level
 3. Actions sampled with Gaussian exploration
 4. Profits computed
@@ -137,9 +139,9 @@ Each episode:
 
 ### Learning Signal
 
-[
-\nabla J \propto -\text{Regret} \times \nabla \log \pi(q | s)
-]
+$$
+\nabla J \propto -\text{Regret} \cdot \nabla \log \pi(q \mid s)
+$$
 
 Regret is optionally **normalized online** to stabilize learning.
 
@@ -161,6 +163,7 @@ trainer = CournotTrainer(
 )
 
 history = trainer.train()
+
 ```
 
 ---
